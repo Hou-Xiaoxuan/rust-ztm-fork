@@ -18,11 +18,38 @@ fn build_agent_ui() {
     }
 }
 
+fn parse_args_to_rustc(dst: &std::path::PathBuf) {
+    // ** `cargo:rustc-*` format is used to pass information to the cargo build system
+
+    // parse to `rustc` to look for dynamic library, used in running
+    let origin_path = if cfg!(target_os = "macos") {
+        "@executable_path"
+    } else if cfg!(target_os = "linux") {
+        "$ORIGIN"
+    } else {
+        "" // windows auto search excutable path
+    };
+    println!(
+        "cargo:rustc-link-arg=-Wl,-rpath,{}/build,-rpath,{}",
+        dst.display(),
+        origin_path
+    );
+    println!(
+        "cargo:rustc-cdylib-link-arg=-Wl,-rpath,{}/build,-rpath,{}",
+        dst.display(),
+        origin_path
+    );
+
+    // add the path to the library to the linker search path, used in build
+    println!("cargo:rustc-link-search={}/build", dst.display());
+
+    println!("cargo:rustc-link-lib=pipy");
+}
+
 fn main() {
     build_agent_ui();
 
     // run npm install in the libs/ztm
-    // TODO expect didn't report error when npm install failed, try npm-rs in the future
     let _ = std::process::Command::new("npm")
         .current_dir("libs/ztm/pipy")
         .arg("install")
@@ -53,19 +80,5 @@ fn main() {
     // build
     let dst = config.build();
 
-    // ** `cargo:rustc-*` format is used to pass information to the cargo build system
-    // parse to `rustc` to look for dynamic library, used in running
-    println!(
-        "cargo:rustc-link-arg=-Wl,-rpath,{}/build,-rpath,$ORIGIN",
-        dst.display()
-    );
-    println!(
-        "cargo:rustc-cdylib-link-arg=-Wl,-rpath,{}/build,-rpath,$ORIGIN",
-        dst.display()
-    );
-
-    // add the path to the library to the linker search path, used in build
-    println!("cargo:rustc-link-search={}/build", dst.display());
-
-    println!("cargo:rustc-link-lib=pipy");
+    parse_args_to_rustc(&dst);
 }
